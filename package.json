@@ -1,6 +1,6 @@
 {
-  "name": "pm2-elasticsearch-logger",
-  "version": "1.0.0",
+  "name": "@worawut/pm2-elasticsearch-logger",
+  "version": "1.0.7",
   "description": "Send PM2 logs to Elasticsearch",
   "main": "index.js",
   "scripts": {
@@ -21,20 +21,21 @@
     "index": "pm2",
     "type": "pm2",
     "host": "",
-    "insecure": false
+    "insecure": false,
+    "apiKey": ""
   },
   "apps": [
     {
-      "name": "pm2-elasticsearch-logger",
+      "name": "@worawut/pm2-elasticsearch-logger",
       "script": "index.js"
     }
   ],
-  "author": "Sebastian Raff <hobbyquaker@gmail.com>",
+  "author": "Worawut <voravutboy@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/hobbyquaker/pm2-elasticsearch-logger/issues"
+    "url": "https://github.com/worawutboy/pm2-elasticsearch-logger/issues"
   },
-  "homepage": "https://github.com/hobbyquaker/pm2-elasticsearch-logger#readme",
+  "homepage": "https://github.com/worawutboy/pm2-elasticsearch-logger#readme",
   "dependencies": {
     "pm2": "latest",
     "pmx": "latest",

@@ -1,101 +1,126 @@
-const os = require('os');
-const pmx = require('pmx');
-const pm2 = require('pm2');
-const request =	require('request');
+const os = require("os");
+const pmx = require("pmx");
+const pm2 = require("pm2");
+const request = require("request");
 
 pmx.initModule({}, (err, conf) => {
-    if (err) {
-        console.error('error on initalizing module', err.message);
-    }
+  if (err) {
+    console.error("error on initalizing module", err.message);
+  }
 
-    const config = {
-        index: conf.index || 'pm2',
-        type: conf.type || 'pm2',
-        host: conf.host || os.hostname(),
-        elasticUrl: conf.elasticUrl || 'http://localhost:9200',
-        insecure: conf.insecure || false
+  const config = {
+    index: conf.index || "pm2",
+    type: conf.type || "pm2",
+    host: conf.host || os.hostname(),
+    elasticUrl: conf.elasticUrl || "http://localhost:9200",
+    insecure: conf.insecure || false,
+    apiKey: conf.apiKey || ""
+  };
+
+  let url;
+  let currentDate;
+
+  function createMapping() {
+    console.log("create mapping for field @timestamp");
+    const data = {
+      index_patterns: [config.index + "-*"], // eslint-disable-line camelcase
+      mappings: {}
+    };
+    data.mappings[config.type] = {
+      properties: {
+        "@timestamp": { type: "date" }
+      }
+    };
+    let headers = {
+      "Content-Type": "application/json"
+    };
+    if (config.apiKey && config.apiKey != "") {
+      headers["Authorization"] = `ApiKey ${config.apiKey}`;
+    }
+    request.put(
+      {
+        url: config.elasticUrl + "/_template/" + config.index,
+        headers: headers,
+        body: JSON.stringify(data),
+        strictSSL: !config.insecure
+      },
+      (err) => {
+        if (err) {
+          console.error("error on creating mapping", err.message);
+        }
+      }
+    );
+  }
+
+  function log(source, msg) {
+    const data = {
+      datetime: new Date().toISOString(),
+      "@timestamp": new Date().getTime(),
+      host: config.host,
+      source,
+      id: msg.process.pm_id,
+      process: msg.process.name,
+      message: msg.data
     };
 
-    let url;
-    let currentDate;
+    const body = JSON.stringify(data);
 
-    function createMapping() {
-        console.log('create mapping for field @timestamp');
-        const data = {
-            index_patterns: [config.index + '-*'], // eslint-disable-line camelcase
-            mappings: {}
-        };
-        data.mappings[config.type] = {
-            properties: {
-                '@timestamp': {type: 'date'}
-            }
-        };
-        request.put({
-            url: config.elasticUrl + '/_template/' + config.index,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data),
-            strictSSL: !config.insecure
-        }, err => {
-            if (err) {
-                console.error('error on creating mapping', err.message);
-            }
-        });
+    const d = new Date();
+    const date = d.getDate();
+    if (date !== currentDate) {
+      const index =
+        config.index +
+        "-" +
+        d.getFullYear() +
+        "." +
+        ("0" + (d.getMonth() + 1)).substr(-2) +
+        "." +
+        ("0" + date).substr(-2);
+      console.log(
+        "sending logs to",
+        config.elasticUrl + "/" + index + "/" + config.type
+      );
+      url = config.elasticUrl + "/" + index + "/" + config.type + "/";
+      currentDate = date;
     }
-
-    function log(source, msg) {
-        const data = {
-            '@timestamp': (new Date()).getTime(),
-            host: config.host,
-            source,
-            id: msg.process.pm_id,
-            process: msg.process.name,
-            message: msg.data
-        };
-
-        const body = JSON.stringify(data);
-
-        const d = new Date();
-        const date = d.getDate();
-        if (date !== currentDate) {
-            const index = config.index + '-' + d.getFullYear() + '.' + ('0' + (d.getMonth() + 1)).substr(-2) + '.' + ('0' + date).substr(-2);
-            console.log('sending logs to', config.elasticUrl + '/' + index + '/' + config.type);
-            url = config.elasticUrl + '/' + index + '/' + config.type + '/';
-            currentDate = date;
-        }
-
-        request.post({
-            url,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body,
-            strictSSL: !config.insecure
-        }, err => {
-            if (err) {
-                console.error('error on sending log message', err.message);
-            }
-        });
+    let headers = {
+      "Content-Type": "application/json"
+    };
+    if (config.apiKey && config.apiKey != "") {
+      headers["Authorization"] = `ApiKey ${config.apiKey}`;
     }
-
-    pm2.launchBus((err, bus) => {
+    request.post(
+      {
+        url,
+        headers: headers,
+        body,
+        strictSSL: !config.insecure
+      },
+      (err) => {
         if (err) {
-            console.error('error on launching pm2 bus', err.message);
+          console.error("error on sending log message", err.message);
         }
+      }
+    );
+  }
 
-        createMapping();
+  pm2.launchBus((err, bus) => {
+    if (err) {
+      console.error("error on launching pm2 bus", err.message);
+    }
 
-        bus.on('log:err', data => {
-            if (data.process.name !== 'pm2-elasticsearch-logger') {
-                log('stderr', data);
-            }
-        });
+    createMapping();
 
-        bus.on('log:out', data => {
-            if (data.process.name !== 'pm2-elasticsearch-logger') {
-                log('stdout', data);
-            }
-        });
+    bus.on("log:err", (data) => {
+      if (data.process.name !== "@worawut/pm2-elasticsearch-logger") {
+        log("stderr", data);
+      }
     });
+
+    bus.on("log:out", (data) => {
+      if (data.process.name !== "@worawut/pm2-elasticsearch-logger") {
+        log("stdout", data);
+      }
+    });
+  });
 });
